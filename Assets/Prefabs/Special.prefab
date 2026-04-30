@@ -181,5 +181,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HitArea
   damageValue: 10
   baseKnockback: 1
+  guardDamage: 0.05
   knockbackAngle: {x: 0.5, y: 0.5}
   owner: {fileID: 0}

@@ -3,38 +3,54 @@ using UnityEngine;
 public class HitArea : MonoBehaviour
 {
     [Header("技の性能設定")]
-    public float damageValue;     // 相手に与えるダメージ(%)
-    public float baseKnockback; // 吹っ飛ばす力の基礎値
-    [Header("吹っ飛び方向（右向き基準）")]
+    public float damageValue;     
+    public float baseKnockback; 
+    public float guardDamageMultiplier;
+    [Header("吹っ飛び方向（右向き基準のベクトル）")]
     public Vector2 knockbackAngle;
 
-    // 自分の親（プレイヤー自身）を登録して、自分への誤爆を防ぐ
     public GameObject owner;
 
-    // トリガー判定（Is Triggerがオンのコライダーが必要）
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        if (owner != null && (collision.gameObject == owner || collision.transform.IsChildOf(owner.transform)))
-        {
-            return;
-        }
-        // 相手のPlayerStatusを取得
-        PlayerStatus targetStatus = collision.GetComponent<PlayerStatus>();
+        if (owner != null && (collision.gameObject == owner || collision.transform.IsChildOf(owner.transform))) return;
 
+        // --- 1. シールド（Shieldレイヤー）への衝突を最優先でチェック ---
+        if (collision.gameObject.layer == LayerMask.NameToLayer("Shield"))
+        {
+            GuardShield shield = collision.GetComponent<GuardShield>();
+            if (shield != null)
+            {
+                shield.TakeShieldDamage(damageValue, guardDamageMultiplier);
+                Debug.Log("シールドに命中！ガード成功");
+                
+                // 弾なら消滅させる
+                if (transform.parent == null) Destroy(gameObject);
+                return; // ここで終了することで本体へのダメージを防ぐ
+            }
+        }
+
+        // --- 2. シールドをすり抜けて本体（PlayerStatus）に衝突した場合 ---
+        PlayerStatus targetStatus = collision.GetComponent<PlayerStatus>();
         if (targetStatus != null)
         {
-            // 攻撃者の向き（flipX）を確認して、飛ばす方向を反転させる
-            float facingDir = (owner.GetComponent<SpriteRenderer>().flipX) ? -1f : 1f;
-            
-            // 設定された角度に、向きを掛け合わせる
-            Vector2 finalDirection = new Vector2(knockbackAngle.x * facingDir, knockbackAngle.y);
-
-            // 相手にダメージと吹っ飛ばしを通知
-            targetStatus.TakeDamage(damageValue, baseKnockback, finalDirection);
-
-            if (transform.parent == null) // 親がいない＝独立したPrefab（弾）の場合
+            if (!targetStatus.isStunned) 
             {
-                Destroy(gameObject);
+                float facingDir;
+                if (transform.parent != null)
+                    facingDir = (transform.localPosition.x >= 0) ? 1f : -1f;
+                else
+                {
+                    Rigidbody2D rb = GetComponent<Rigidbody2D>();
+                    facingDir = (rb != null && rb.linearVelocity.x < 0) ? -1f : 1f;
+                }
+
+                Vector2 finalDirection = new Vector2(knockbackAngle.x * facingDir, knockbackAngle.y);
+                targetStatus.TakeDamage(damageValue, baseKnockback, finalDirection);
+                
+                Debug.Log("本体に命中！");
+
+                if (transform.parent == null) Destroy(gameObject);
             }
         }
     }
