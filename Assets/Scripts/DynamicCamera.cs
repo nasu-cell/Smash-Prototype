@@ -17,7 +17,7 @@ public class DynamicCamera : MonoBehaviour
     private Camera cam;
 
     [Header("カメラの限界値")]
-     // GameManagerで設定した撃墜ラインより少し内側（例：5ユニット分）で止まるようにする
+     // GameManagerで設定した撃墜ラインより少し内側で止まるようにする
     public float camLimitX; // ステージに合わせて調整
     public float camLimitY;
 
@@ -32,6 +32,12 @@ public class DynamicCamera : MonoBehaviour
 
         Move();
         Zoom();
+    }
+
+    public void SetTargets(Transform p1, Transform p2)
+    {
+        player1 = p1;
+        player2 = p2;
     }
 
     void Move()

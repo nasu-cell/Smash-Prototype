@@ -6,6 +6,7 @@ public class ActorController : MonoBehaviour
     private SpriteRenderer spriteRenderer;
     private FighterCombat fighterCombat;
     private PlayerStatus playerStatus; // キャッシュ用
+    public bool isMine = false;
 
     [Header("入力設定")]
     public KeyCode leftKey;
@@ -47,6 +48,7 @@ public class ActorController : MonoBehaviour
 
     void Update()
     {
+        if (!isMine) return;
          // 接地したら「しりもち落下」を解除
          if (isGround && playerStatus.isFallingHelpless)
          {

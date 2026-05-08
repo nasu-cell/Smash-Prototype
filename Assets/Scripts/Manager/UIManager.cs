@@ -32,11 +32,41 @@ public class UIManager : MonoBehaviour
         UpdateUI(p2UI);
     }
 
+    public void SetPlayerStatus(int playerNum, PlayerStatus status)
+    {
+        if (playerNum == 1) p1UI.status = status;
+        else p2UI.status = status;
+        
+        // アイコンなどの初期化を走らせる
+        if (playerNum == 1) InitializeUI(p1UI);
+        else InitializeUI(p2UI);
+    }
+
     private void InitializeUI(PlayerUIComponents ui)
     {
-        if (ui.status != null && ui.faceIconImage != null)
+        if (ui.status != null)
         {
-            ui.faceIconImage.sprite = ui.status.faceIcon;
+            /* 1. メインの顔アイコンをセット*/
+            if (ui.faceIconImage != null)
+            {
+                ui.faceIconImage.sprite = ui.status.faceIcon;
+            }
+
+            /* 2. ストックアイコンをすべてキャラのアイコンに差し替える (追加)*/
+            if (ui.stockIcons != null)
+            {
+                foreach (GameObject iconObj in ui.stockIcons)
+                {
+                    if (iconObj == null) continue;
+                
+                    // ストックアイコンのオブジェクトについている Image コンポーネントを取得
+                    Image iconImage = iconObj.GetComponent<Image>();
+                    if (iconImage != null)
+                    {
+                        iconImage.sprite = ui.status.faceIcon; // Statusに設定された顔画像にする
+                    }
+                }
+            }
         }
     }
 
