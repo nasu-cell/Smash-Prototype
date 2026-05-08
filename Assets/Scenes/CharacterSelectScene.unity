@@ -163,6 +163,56 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &156149917
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 156149919}
+  - component: {fileID: 156149918}
+  m_Layer: 0
+  m_Name: NeeworkLauncher
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &156149918
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 156149917}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c6dd8efb349a9c74b9c4bea783016282, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkLauncher
+  battleSceneName: OnlineBattleScene
+  characterPrefabs:
+  - {fileID: 5001918043449396130, guid: 55b964fbaf0dc0240b8b57f3ab1d1987, type: 3}
+  - {fileID: 7355955088751616384, guid: 54f682795f189bb48948c8095a5fd333, type: 3}
+  spawnPos1: {x: -3, y: 1, z: 0}
+  spawnPos2: {x: 3, y: 1, z: 0}
+--- !u!4 &156149919
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 156149917}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &206056173
 GameObject:
   m_ObjectHideFlags: 0
@@ -2221,3 +2271,4 @@ SceneRoots:
   - {fileID: 714494145}
   - {fileID: 390149307}
   - {fileID: 878363411}
+  - {fileID: 156149919}

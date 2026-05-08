@@ -84,15 +84,15 @@ public class ActorController : MonoBehaviour
     // しりもち落下中の左右微調整用
     private void AirMoveUpdate()
     {
-        if (Input.GetKey(rightKey)) 
+        if (Input.GetKey(rightKey))
         {
             xSpeed = 4.0f; // 通常より少し遅くしても良い
         }
-        else if (Input.GetKey(leftKey)) 
+        else if (Input.GetKey(leftKey))
         {
             xSpeed = -4.0f;
         }
-        else 
+        else
         {
             xSpeed = 0;
         }
@@ -234,6 +234,9 @@ public class ActorController : MonoBehaviour
 
    private void FixedUpdate()
    {
+        // ★ Step 2 追加：リモート側はネットワーク同期に任せて何もしない
+        if (!isMine) return;
+
         if (playerStatus.isStunned) return;
 
         Vector2 velocity = rigidbody2D.linearVelocity;

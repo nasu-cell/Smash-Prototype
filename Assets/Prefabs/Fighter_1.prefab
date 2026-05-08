@@ -637,6 +637,10 @@ GameObject:
   - component: {fileID: 5171575503381086730}
   - component: {fileID: 571898111000353025}
   - component: {fileID: 2867484203119110993}
+  - component: {fileID: 7355955088751616384}
+  - component: {fileID: 2428604278078444661}
+  - component: {fileID: 4598626567973398784}
+  - component: {fileID: -8302746883747886128}
   m_Layer: 6
   m_Name: Fighter_1
   m_TagString: Untagged
@@ -763,6 +767,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ee99a37fd4305e747b986e6f9b518d33, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ActorController
+  isMine: 0
   leftKey: 276
   rightKey: 275
   upKey: 273
@@ -864,6 +869,70 @@ CapsuleCollider2D:
   m_Offset: {x: 0.2, y: -0.2}
   m_Size: {x: 2, y: 3.5}
   m_Direction: 0
+--- !u!114 &7355955088751616384
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7450679251854726115}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -1552182283, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkObject
+  SortKey: 4143012805
+  ObjectInterest: 1
+  Flags: 262145
+  NestedObjects: []
+  NetworkedBehaviours:
+  - {fileID: 2428604278078444661}
+  - {fileID: 4598626567973398784}
+  - {fileID: -8302746883747886128}
+  ForceRemoteRenderTimeframe: 0
+--- !u!114 &2428604278078444661
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7450679251854726115}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3660a363d19a9184dbc600cb8e51df63, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkPlayerRegistrar
+--- !u!114 &4598626567973398784
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7450679251854726115}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6307084b62c20e548a027e0384ffeae5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkSpriteFlipSync
+  _FlipX:
+    _value: 0
+--- !u!114 &-8302746883747886128
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7450679251854726115}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 158639473, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkTransform
+  _stateAuthorityChangeErrorCorrectionDelta: 0
+  SyncScale: 0
+  SyncParent: 0
+  _autoAOIOverride: 1
+  DisableSharedModeInterpolation: 0
 --- !u!1 &7752396587620702414
 GameObject:
   m_ObjectHideFlags: 0
