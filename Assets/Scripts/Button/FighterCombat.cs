@@ -1,40 +1,47 @@
 using UnityEngine;
 using System.Collections;
+using Fusion;
 
-public class FighterCombat : MonoBehaviour
+/// <summary>
+/// Step 3 版：NetworkBehaviour 化。
+/// - 通常攻撃（横/上）は所有者から RPC を発行し、全クライアントで同じ視覚効果を再生
+/// - 必殺技の弾は所有者だけが Runner.Spawn で生成（NetworkObject として全員に伝播）
+/// - 当たり判定の発火は HitArea 側で StateAuthority チェック
+/// </summary>
+public class FighterCombat : NetworkBehaviour
 {
     private PlayerStatus playerStatus;
     public SpriteRenderer spriteRenderer;
-    public Sprite normalSprite; 
+    public Sprite normalSprite;
 
     [Header("横攻撃設定")]
-    public Sprite sideAttackSprite; 
-    public GameObject sideHitboxRight; 
+    public Sprite sideAttackSprite;
+    public GameObject sideHitboxRight;
     public GameObject sideHitboxLeft;
 
     [Header("上攻撃設定")]
-    public Sprite upAttackSprite; 
-    public GameObject upHitboxRight; // 右向き時の上判定(真上+右上)
-    public GameObject upHitboxLeft;  // 左向き時の上判定(真上+左上)
+    public Sprite upAttackSprite;
+    public GameObject upHitboxRight;
+    public GameObject upHitboxLeft;
 
     [Header("必殺技設定")]
-    public GameObject specialPrefab; 
-    public Transform firePoint; 
+    [Tooltip("ルートに NetworkObject + NetworkTransform が付いた弾 Prefab を登録")]
+    public NetworkObject specialPrefab;
+    public Transform firePoint;
 
     [Header("上必殺技設定")]
     public Sprite upSpecialSprite;
     public float upSpecialForce = 15f;
-    public float sideSpecialForce = 5f; // 斜め上昇させる場合
+    public float sideSpecialForce = 5f;
 
     private bool isAttacking = false;
 
     void Start()
     {
         playerStatus = GetComponent<PlayerStatus>();
-        // 全判定を初期状態でオフ
         DeactivateAllHitboxes();
-        
-        if (normalSprite == null && spriteRenderer != null) 
+
+        if (normalSprite == null && spriteRenderer != null)
         {
             normalSprite = spriteRenderer.sprite;
         }
@@ -48,92 +55,129 @@ public class FighterCombat : MonoBehaviour
         if (upHitboxLeft) upHitboxLeft.SetActive(false);
     }
 
+    // ===== 入力エントリポイント（ActorController から呼ばれる） =====
+
     public void PerformSideAttack(bool isRight)
     {
         if (isAttacking) return;
-        GameObject targetHitbox = isRight ? sideHitboxRight : sideHitboxLeft;
-        StartCoroutine(AttackRoutine(sideAttackSprite, targetHitbox, isRight));
+        if (!Object.HasStateAuthority) return;
+        RPC_PlaySideAttack(isRight);
     }
 
     public void PerformUpAttack(bool isRight)
     {
         if (isAttacking) return;
+        if (!Object.HasStateAuthority) return;
+        RPC_PlayUpAttack(isRight);
+    }
+
+    public void PerformSpecial(bool isRight)
+    {
+        if (isAttacking || playerStatus.isFallingHelpless) return;
+        if (!Object.HasStateAuthority) return;
+
+        if (specialPrefab == null || firePoint == null)
+        {
+            Debug.LogWarning("specialPrefab または firePoint が未設定");
+            return;
+        }
+
+        // 弾は NetworkObject として Runner.Spawn → 全員に伝播
+        var bullet = Runner.Spawn(specialPrefab, firePoint.position, Quaternion.identity, Object.InputAuthority);
+
+        // 速度設定（所有者側で初速を入れる。NetworkTransform で位置同期される）
+        var rb = bullet.GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            float speed = 15f;
+            rb.linearVelocity = new Vector2(isRight ? speed : -speed, 0f);
+        }
+
+        // HitArea の owner を設定（自分への命中防止用）
+        var hit = bullet.GetComponent<HitArea>();
+        if (hit != null) hit.owner = this.gameObject;
+    }
+
+    public void PerformUpSpecial(bool isRight)
+    {
+        if (isAttacking || playerStatus.isFallingHelpless) return;
+        if (!Object.HasStateAuthority) return;
+        RPC_PlayUpSpecial(isRight);
+    }
+
+    // ===== RPC：全クライアントで視覚効果を再生 =====
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_PlaySideAttack(NetworkBool isRight)
+    {
+        GameObject targetHitbox = isRight ? sideHitboxRight : sideHitboxLeft;
+        StartCoroutine(AttackRoutine(sideAttackSprite, targetHitbox, isRight));
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_PlayUpAttack(NetworkBool isRight)
+    {
         GameObject targetHitbox = isRight ? upHitboxRight : upHitboxLeft;
         StartCoroutine(AttackRoutine(upAttackSprite, targetHitbox, isRight));
     }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_PlayUpSpecial(NetworkBool isRight)
+    {
+        StartCoroutine(UpSpecialRoutine(isRight));
+    }
+
+    // ===== 視覚効果コルーチン（全クライアントで動く） =====
 
     private IEnumerator AttackRoutine(Sprite attackSprite, GameObject hitbox, bool isRight)
     {
         isAttacking = true;
 
-        // 1. 画像切り替えと向き固定
         spriteRenderer.sprite = attackSprite;
-        spriteRenderer.flipX = !isRight; 
-        
-        // 2. 当たり判定を有効化
-        if (hitbox != null) 
+        spriteRenderer.flipX = !isRight;
+
+        if (hitbox != null)
         {
             HitArea hit = hitbox.GetComponent<HitArea>();
             if (hit != null) hit.owner = this.gameObject;
             hitbox.SetActive(true);
         }
 
-        yield return new WaitForSeconds(0.2f); // 攻撃持続時間
+        yield return new WaitForSeconds(0.2f);
 
-        // 3. 元に戻す
         if (hitbox != null) hitbox.SetActive(false);
         spriteRenderer.sprite = normalSprite;
-        
+
         isAttacking = false;
-    }
-
-    public void PerformSpecial(bool isRight)
-    {
-        if (isAttacking || playerStatus.isFallingHelpless) return;
-
-        if (specialPrefab != null && firePoint != null)
-        {
-            GameObject bullet = Instantiate(specialPrefab, firePoint.position, Quaternion.identity);
-            Rigidbody2D rb = bullet.GetComponent<Rigidbody2D>();
-            HitArea hit = bullet.GetComponent<HitArea>();
-            if (hit != null) hit.owner = this.gameObject;
-            
-            if (rb != null)
-            {
-                float speed = 15f;
-                rb.linearVelocity = new Vector2(isRight ? speed : -speed, 0f);
-            }
-        }
-    }
-
-    public void PerformUpSpecial(bool isRight)
-    {
-        if (isAttacking || playerStatus.isFallingHelpless) return;
-        StartCoroutine(UpSpecialRoutine(isRight));
     }
 
     private IEnumerator UpSpecialRoutine(bool isRight)
     {
         isAttacking = true;
-        playerStatus.isFallingHelpless = true; // しりもち落下フラグを即座に立てる
 
-        // スプライト変更
+        // しりもち落下フラグは所有者側で立てる
+        if (Object.HasStateAuthority)
+        {
+            playerStatus.isFallingHelpless = true;
+        }
+
         spriteRenderer.sprite = upSpecialSprite;
         spriteRenderer.flipX = !isRight;
 
-        // 物理的な上昇処理
-        Rigidbody2D rb = GetComponent<Rigidbody2D>();
-        if (rb != null)
+        // 物理上昇は所有者側だけ実行（リモートは NetworkTransform で位置追従）
+        if (Object.HasStateAuthority)
         {
-            // 瞬間的に上方向（＋少し前方向）へ速度を上書き
-            float xVel = isRight ? sideSpecialForce : -sideSpecialForce;
-            rb.linearVelocity = new Vector2(xVel, upSpecialForce);
+            Rigidbody2D rb = GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                float xVel = isRight ? sideSpecialForce : -sideSpecialForce;
+                rb.linearVelocity = new Vector2(xVel, upSpecialForce);
+            }
         }
 
-        yield return new WaitForSeconds(0.3f); // 上昇モーション時間
+        yield return new WaitForSeconds(0.3f);
 
         spriteRenderer.sprite = normalSprite;
         isAttacking = false;
-        // ここでは isFallingHelpless は false にしない（接地するまで維持）
     }
 }

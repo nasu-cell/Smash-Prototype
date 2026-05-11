@@ -2,16 +2,20 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
+/// <summary>
+/// Step 4 修正版：
+/// PlayerStatus が Despawn された直後（シーン遷移時など）に Networked プロパティへ
+/// アクセスして InvalidOperationException が出るのを防ぐため、Object のガードを追加。
+/// </summary>
 public class UIManager : MonoBehaviour
 {
-    // 各プレイヤーのUI要素をまとめる構造体
     [System.Serializable]
     public struct PlayerUIComponents
     {
-        public PlayerStatus status;           // 参照するStatus
-        public TextMeshProUGUI damageText;    // ダメージテキスト
-        public Image faceIconImage;           // 顔アイコン画像
-        public GameObject[] stockIcons;       // ストック画像（3つなら要素数3の配列）
+        public PlayerStatus status;
+        public TextMeshProUGUI damageText;
+        public Image faceIconImage;
+        public GameObject[] stockIcons;
     }
 
     [Header("プレイヤーUI設定")]
@@ -20,14 +24,12 @@ public class UIManager : MonoBehaviour
 
     void Start()
     {
-        // ゲーム開始時に顔アイコンを設定
         InitializeUI(p1UI);
         InitializeUI(p2UI);
     }
 
     void Update()
     {
-        // 毎フレーム表示を更新
         UpdateUI(p1UI);
         UpdateUI(p2UI);
     }
@@ -36,35 +38,29 @@ public class UIManager : MonoBehaviour
     {
         if (playerNum == 1) p1UI.status = status;
         else p2UI.status = status;
-        
-        // アイコンなどの初期化を走らせる
+
         if (playerNum == 1) InitializeUI(p1UI);
         else InitializeUI(p2UI);
     }
 
     private void InitializeUI(PlayerUIComponents ui)
     {
-        if (ui.status != null)
-        {
-            /* 1. メインの顔アイコンをセット*/
-            if (ui.faceIconImage != null)
-            {
-                ui.faceIconImage.sprite = ui.status.faceIcon;
-            }
+        if (ui.status == null) return;
 
-            /* 2. ストックアイコンをすべてキャラのアイコンに差し替える (追加)*/
-            if (ui.stockIcons != null)
+        if (ui.faceIconImage != null)
+        {
+            ui.faceIconImage.sprite = ui.status.faceIcon;
+        }
+
+        if (ui.stockIcons != null)
+        {
+            foreach (GameObject iconObj in ui.stockIcons)
             {
-                foreach (GameObject iconObj in ui.stockIcons)
+                if (iconObj == null) continue;
+                Image iconImage = iconObj.GetComponent<Image>();
+                if (iconImage != null)
                 {
-                    if (iconObj == null) continue;
-                
-                    // ストックアイコンのオブジェクトについている Image コンポーネントを取得
-                    Image iconImage = iconObj.GetComponent<Image>();
-                    if (iconImage != null)
-                    {
-                        iconImage.sprite = ui.status.faceIcon; // Statusに設定された顔画像にする
-                    }
+                    iconImage.sprite = ui.status.faceIcon;
                 }
             }
         }
@@ -74,11 +70,13 @@ public class UIManager : MonoBehaviour
     {
         if (ui.status == null) return;
 
+        // ★ Step 4 追加：Despawn 済みなら何もしない（シーン遷移時の例外回避）
+        if (ui.status.Object == null) return;
+
         // 1. ダメージ表示の更新
         if (ui.damageText != null)
         {
             ui.damageText.text = ui.status.totalDamage.ToString("F1") + "%";
-            // ダメージが増えるほど白 -> 赤に変化
             ui.damageText.color = Color.Lerp(Color.white, Color.red, ui.status.totalDamage / 200f);
         }
 
@@ -89,8 +87,6 @@ public class UIManager : MonoBehaviour
             {
                 if (ui.stockIcons[i] != null)
                 {
-                    // 現在のストック数より小さいインデックスのアイコンだけ表示
-                    // 例：ストック2なら、アイコン0と1が表示され、2が消える
                     ui.stockIcons[i].SetActive(i < ui.status.currentStock);
                 }
             }

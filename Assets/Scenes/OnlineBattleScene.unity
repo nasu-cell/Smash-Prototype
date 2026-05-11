@@ -2323,6 +2323,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1711392529}
   - component: {fileID: 1711392530}
+  - component: {fileID: 1711392531}
   m_Layer: 0
   m_Name: OnlineGameManager
   m_TagString: Untagged
@@ -2357,17 +2358,35 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 54560c89e37737b4f8b8b7f5d84c8691, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::OnlineGameManager
-  spawnPoint1: {fileID: 567513733}
-  spawnPoint2: {fileID: 394785154}
-  characterPrefabs:
-  - {fileID: 5704423020022135581, guid: 55b964fbaf0dc0240b8b57f3ab1d1987, type: 3}
-  - {fileID: 7450679251854726115, guid: 54f682795f189bb48948c8095a5fd333, type: 3}
   dynamicCamera: {fileID: 1915283771}
   uiManager: {fileID: 1242566449}
+  spawnPoint1: {fileID: 567513733}
+  spawnPoint2: {fileID: 394785154}
   limitLeft: -20
   limitRight: 20
   limitUp: 15
   limitDown: -10
+  resultSceneName: OnlineResultScene
+  _WinnerPlayerNum: 0
+--- !u!114 &1711392531
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1711392528}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: -1552182283, guid: e725a070cec140c4caffb81624c8c787, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Fusion.Runtime.dll::Fusion.NetworkObject
+  SortKey: 3848933609
+  ObjectInterest: 1
+  Flags: 262145
+  NestedObjects: []
+  NetworkedBehaviours:
+  - {fileID: 1711392530}
+  ForceRemoteRenderTimeframe: 0
 --- !u!1 &1714962990
 GameObject:
   m_ObjectHideFlags: 0

@@ -1,150 +1,195 @@
 using UnityEngine;
+using Fusion;
 
-public class PlayerStatus : MonoBehaviour
+/// <summary>
+/// Step 4 版：NetworkBehaviour 化。
+/// ダメージ %、ストック、各種フラグ、シールド耐久値をネットワーク同期。
+/// 被弾は HitArea から RPC_TakeDamage 経由で被弾側の StateAuthority に通知。
+/// </summary>
+public class PlayerStatus : NetworkBehaviour
 {
-    [Header("基本ステータス")]
+    [Header("基本ステータス（Inspector で設定）")]
     public string playerName = "P1";
-    public float totalDamage = 0f;
-    public int currentStock = 3;  // 現在のストック
-    public Sprite faceIcon;       // キャラクターの顔画像（Inspectorで設定）
-    [Header("ステータス")]
-    public bool isStunned = false; // 吹っ飛び・硬直中か
-    public bool isGuarding = false; // ガード中か
-    public bool isShieldBroken = false; // シールドブレイク中か
-    public bool isFallingHelpless; // しりもち落下（操作不能）フラグ
+    public Sprite faceIcon;
+    public int initialStock = 3;
+
+    // ===== Networked state（全クライアントで同じ値が見える） =====
+    [Networked] public float totalDamage { get; set; }
+    [Networked] public int currentStock { get; set; }
+    [Networked] public NetworkBool isStunned { get; set; }
+    [Networked] public NetworkBool isGuarding { get; set; }
+    [Networked] public NetworkBool isShieldBroken { get; set; }
+    [Networked] public NetworkBool isFallingHelpless { get; set; }
+    [Networked] public float shieldScale { get; set; }
 
     [Header("シールド設定")]
-    public float shrinkSpeed; // ガード時の減少速度
-    public float recoverSpeed; // 非ガード時の回復速度
-    
+    public float shrinkSpeed;
+    public float recoverSpeed;
+
     [Header("摩擦設定")]
-    public PhysicsMaterial2D frictionlessMaterial; // 摩擦 0
-    public PhysicsMaterial2D highFrictionMaterial; // 摩擦 1.0 以上
+    public PhysicsMaterial2D frictionlessMaterial;
+    public PhysicsMaterial2D highFrictionMaterial;
 
     private KnockbackCalculator calculator;
     private Rigidbody2D rb;
     private GuardShield shield;
     private CapsuleCollider2D myCollider;
     private ActorController actorController;
+    private SpriteRenderer sr;
 
-    void Start()
+    // Fusion 流のタイマー（Invoke の代わり）
+    private TickTimer breakRecoverTimer;
+    private TickTimer stunRecoverTimer;
+
+    public override void Spawned()
     {
         calculator = new KnockbackCalculator();
         rb = GetComponent<Rigidbody2D>();
         shield = GetComponentInChildren<GuardShield>(true);
         myCollider = GetComponent<CapsuleCollider2D>();
         actorController = GetComponent<ActorController>();
-        
-        // 初期状態は摩擦なしに設定
+        sr = GetComponent<SpriteRenderer>();
+
         if (myCollider != null && frictionlessMaterial != null)
         {
             myCollider.sharedMaterial = frictionlessMaterial;
         }
+
+        // 初期値は StateAuthority だけが設定
+        if (HasStateAuthority)
+        {
+            currentStock = initialStock;
+            totalDamage = 0;
+            shieldScale = shield != null ? shield.maxScale : 1f;
+        }
     }
 
-    void Update()
+    public override void FixedUpdateNetwork()
     {
-        // 摩擦の動的切り替え
-        UpdatePhysicsMaterial();
-
+        if (!HasStateAuthority) return;
         if (shield == null) return;
 
-        // 1. シールドの表示切り替え
-        shield.gameObject.SetActive(isGuarding && !isShieldBroken);
-
-        // 2. シールドのサイズ管理
+        // シールドサイズの更新
         if (isGuarding && !isShieldBroken)
         {
-            // ガード中：減少
-            shield.UpdateShield(-shrinkSpeed * Time.deltaTime);
-            
-            // 最小値に達したらブレイク
-            if (shield.currentScale <= shield.minScale)
+            shieldScale = Mathf.Clamp(shieldScale - shrinkSpeed * Runner.DeltaTime, shield.minScale, shield.maxScale);
+            if (shieldScale <= shield.minScale)
             {
                 ShieldBreak();
             }
         }
-        else
+        else if (!isShieldBroken)
         {
-            // ガードしていない間回復
-            if(!isShieldBroken)
+            shieldScale = Mathf.Clamp(shieldScale + recoverSpeed * Runner.DeltaTime, shield.minScale, shield.maxScale);
+        }
+
+        // タイマー満了による状態復帰
+        if (breakRecoverTimer.Expired(Runner))
+        {
+            isShieldBroken = false;
+            isStunned = false;
+            shieldScale = shield.maxScale;
+            breakRecoverTimer = TickTimer.None;
+        }
+
+        if (stunRecoverTimer.Expired(Runner))
+        {
+            if (!isShieldBroken)
             {
-                shield.UpdateShield(recoverSpeed * Time.deltaTime);
+                isStunned = false;
             }
+            stunRecoverTimer = TickTimer.None;
         }
     }
 
-    /// <summary>
-    /// 状況に応じてコライダーの摩擦を切り替える
-    /// </summary>
+    public override void Render()
+    {
+        // 視覚更新は全クライアントで実行
+        UpdatePhysicsMaterial();
+        UpdateShieldVisual();
+        UpdateBodyColor();
+    }
+
+    private void UpdateShieldVisual()
+    {
+        if (shield == null) return;
+        shield.gameObject.SetActive(isGuarding && !isShieldBroken);
+        shield.transform.localScale = Vector3.one * shieldScale;
+        shield.currentScale = shieldScale;
+    }
+
+    private void UpdateBodyColor()
+    {
+        if (sr == null) return;
+        sr.color = isShieldBroken ? Color.gray : Color.white;
+    }
+
     private void UpdatePhysicsMaterial()
     {
         if (myCollider == null || actorController == null) return;
 
-        // 【条件のポイント】
-        // 接地しており、かつ「ガード中」または「ブレイク中」のみ摩擦を強くする。
-        // ※ 通常の被弾(isStunnedのみ)の時はここを通らず、摩擦0になる。
         if (actorController.isGround && (isGuarding || isShieldBroken))
         {
             myCollider.sharedMaterial = highFrictionMaterial;
         }
         else
         {
-            // 移動中、空中、および「攻撃を受けて吹っ飛んでいる最中」は滑るようにする
             myCollider.sharedMaterial = frictionlessMaterial;
         }
     }
 
     public void ShieldBreak()
     {
+        if (!HasStateAuthority) return;
         isShieldBroken = true;
-        isGuarding = false; // ブレイクしたらガード強制解除
-        isStunned = true;   // ブレイク直後も硬直状態にする
-        rb.linearVelocity = Vector2.zero;
-        GetComponent<SpriteRenderer>().color = Color.gray;
-        
-        // 3秒後に復帰
-        Invoke("RecoverFromBreak", 3.0f);
+        isGuarding = false;
+        isStunned = true;
+        if (rb != null) rb.linearVelocity = Vector2.zero;
+        breakRecoverTimer = TickTimer.CreateFromSeconds(Runner, 3.0f);
     }
 
-    void RecoverFromBreak()
+    /// <summary>
+    /// 攻撃側の HitArea から呼ばれる。被弾側の StateAuthority で実行される。
+    /// </summary>
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_TakeDamage(float baseDamage, float baseKnockback, Vector2 direction)
     {
-        isShieldBroken = false;
-        isStunned = false;
-        shield.currentScale = shield.maxScale;
-        GetComponent<SpriteRenderer>().color = Color.white;
-    }
+        if (isShieldBroken) return;
 
-    // ダメージを受ける処理
-    public void TakeDamage(float baseDamage, float baseKnockback, Vector2 direction)
-    {
-        // ブレイク中の追撃を許さない場合はここでリターン（仕様に合わせて調整）
-        if (isShieldBroken) return; 
-
-        // 1. ダメージ蓄積
         totalDamage += baseDamage;
-
-        // 2. 最終的な吹っ飛び強度を計算
         float finalForce = calculator.Calculate(totalDamage, baseKnockback);
-
         isStunned = true;
 
-        // 3. 実際に吹っ飛ばす
-        rb.linearVelocity = Vector2.zero; // 速度をリセットしてノックバックを正確に適用
-        transform.position += new Vector3(0, 0.1f, 0); // 地面との摩擦を完全に切るために微浮上
-        rb.AddForce(direction.normalized * finalForce, ForceMode2D.Impulse);
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector2.zero;
+            transform.position += new Vector3(0, 0.1f, 0);
+            rb.AddForce(direction.normalized * finalForce, ForceMode2D.Impulse);
+        }
 
-        // 0.5秒後に硬直から回復
-        CancelInvoke("Recover"); 
-        Invoke("Recover", 0.5f);
+        stunRecoverTimer = TickTimer.CreateFromSeconds(Runner, 0.5f);
     }
 
-    void Recover()
+    /// <summary>
+    /// シールドに攻撃が当たった時。被弾側の StateAuthority で実行される。
+    /// </summary>
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    public void RPC_TakeShieldHit(float damage, float multiplier)
     {
-        // ガード中やブレイク中でなければスタン解除
-        if (!isShieldBroken)
-        {
-            isStunned = false;
-        }
+        if (shield == null) return;
+        shieldScale = Mathf.Clamp(shieldScale - damage * multiplier, shield.minScale, shield.maxScale);
+    }
+
+    /// <summary>
+    /// 撃墜（場外）時に OnlineGameManager から呼ばれる。
+    /// 必ず player の StateAuthority クライアントで呼ぶこと。
+    /// </summary>
+    public void OnKilled()
+    {
+        if (!HasStateAuthority) return;
+        currentStock--;
+        totalDamage = 0;
+        isFallingHelpless = false;
+        isStunned = false;
     }
 }

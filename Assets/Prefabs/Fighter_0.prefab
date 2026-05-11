@@ -660,7 +660,7 @@ MonoBehaviour:
   upAttackSprite: {fileID: 21300000, guid: 3cc816b2057d7db45935ae5cf60e22e6, type: 3}
   upHitboxRight: {fileID: 4894691062512593305}
   upHitboxLeft: {fileID: 5833110463648507661}
-  specialPrefab: {fileID: 3748748625558523987, guid: 9de7dd62f98794444bde8f4c428675e3, type: 3}
+  specialPrefab: {fileID: 8638113543758831873, guid: 9de7dd62f98794444bde8f4c428675e3, type: 3}
   firePoint: {fileID: 2007953939515862976}
   upSpecialSprite: {fileID: 21300000, guid: f00bdf752b2f0ef4a96a02839df82d3b, type: 3}
   upSpecialForce: 15
@@ -678,13 +678,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerStatus
   playerName: P1
-  totalDamage: 0
-  currentStock: 3
   faceIcon: {fileID: 21300000, guid: 63dbbd557c45a40408525bf39bb0350d, type: 3}
-  isStunned: 0
-  isGuarding: 0
-  isShieldBroken: 0
-  isFallingHelpless: 0
+  initialStock: 3
+  _totalDamage: 0
+  _currentStock: 0
+  _isStunned:
+    _value: 0
+  _isGuarding:
+    _value: 0
+  _isShieldBroken:
+    _value: 0
+  _isFallingHelpless:
+    _value: 0
+  _shieldScale: 0
   shrinkSpeed: 4
   recoverSpeed: 2
   frictionlessMaterial: {fileID: 6200000, guid: 3fe9cd846a51e6e478de978aef6be4db, type: 2}
@@ -743,6 +749,8 @@ MonoBehaviour:
   Flags: 262145
   NestedObjects: []
   NetworkedBehaviours:
+  - {fileID: 5856211045496625707}
+  - {fileID: 3461218417650053545}
   - {fileID: 6247781428125141137}
   - {fileID: 290619479206834971}
   - {fileID: 3488805743557499011}

@@ -5,10 +5,8 @@ using Fusion;
 /// 各キャラクター Prefab のルートに付ける NetworkBehaviour。
 /// Spawned() 時に OnlineGameManager へ自分を「P1か P2 か」付きで登録する。
 ///
-/// 判定ロジック：
-///   ・自分のキャラ (HasInputAuthority == true) は GameDataContainer.isP1 と一致
-///   ・相手のキャラ (HasInputAuthority == false) はその反対
-/// 　 NetworkLauncher.OnSceneLoadDone() で isP1 を保存済みである前提。
+/// Step 3 追加：リモート視点での Rigidbody2D 競合を防ぐため、
+/// 自分以外のキャラの Rigidbody2D を Kinematic に切り替える。
 /// </summary>
 public class NetworkPlayerRegistrar : NetworkBehaviour
 {
@@ -23,6 +21,14 @@ public class NetworkPlayerRegistrar : NetworkBehaviour
         var ac = GetComponent<ActorController>();
         if (ac != null) ac.isMine = isMine;
 
+        // ★ Step 3 追加：リモート視点では Rigidbody2D を Kinematic に
+        //   ローカル所有者だけ Dynamic で物理駆動。NetworkTransform で位置追従。
+        var rb = GetComponent<Rigidbody2D>();
+        if (rb != null)
+        {
+            rb.bodyType = isMine ? RigidbodyType2D.Dynamic : RigidbodyType2D.Kinematic;
+        }
+
         // OnlineGameManager に登録 → カメラ/UI に伝わる
         if (OnlineGameManager.Instance != null)
         {
@@ -30,7 +36,7 @@ public class NetworkPlayerRegistrar : NetworkBehaviour
         }
         else
         {
-            Debug.LogWarning("[NetworkPlayerRegistrar] OnlineGameManager.Instance が見つかりません。シーンに OnlineGameManager を 1 つ置いてください。");
+            Debug.LogWarning("[NetworkPlayerRegistrar] OnlineGameManager.Instance が見つかりません。");
         }
 
         Debug.Log($"[NetworkPlayerRegistrar] Spawned: isMine={isMine}, isP1={isP1}, InputAuthority={Object.InputAuthority}");
