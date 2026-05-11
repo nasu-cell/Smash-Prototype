@@ -895,6 +895,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ee99a37fd4305e747b986e6f9b518d33, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ActorController
+  isMine: 0
   leftKey: 97
   rightKey: 100
   upKey: 119
@@ -930,7 +931,8 @@ MonoBehaviour:
   upAttackSprite: {fileID: 21300000, guid: 3cc816b2057d7db45935ae5cf60e22e6, type: 3}
   upHitboxRight: {fileID: 1251253543}
   upHitboxLeft: {fileID: 33671453}
-  specialPrefab: {fileID: 3748748625558523987, guid: 9de7dd62f98794444bde8f4c428675e3, type: 3}
+  specialOnlinePrefab: {fileID: 8638113543758831873, guid: 9de7dd62f98794444bde8f4c428675e3, type: 3}
+  specialLocalPrefab: {fileID: 3748748625558523987, guid: 4da608f721847694997a723dbe31f9d0, type: 3}
   firePoint: {fileID: 757422861}
   upSpecialSprite: {fileID: 21300000, guid: f00bdf752b2f0ef4a96a02839df82d3b, type: 3}
   upSpecialForce: 15
@@ -948,13 +950,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerStatus
   playerName: P1
-  totalDamage: 0
-  currentStock: 3
   faceIcon: {fileID: 21300000, guid: 63dbbd557c45a40408525bf39bb0350d, type: 3}
-  isStunned: 0
-  isGuarding: 0
-  isShieldBroken: 0
-  isFallingHelpless: 0
+  initialStock: 3
   shrinkSpeed: 4
   recoverSpeed: 2
   frictionlessMaterial: {fileID: 6200000, guid: 3fe9cd846a51e6e478de978aef6be4db, type: 2}
@@ -3188,6 +3185,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ee99a37fd4305e747b986e6f9b518d33, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ActorController
+  isMine: 0
   leftKey: 276
   rightKey: 275
   upKey: 273
@@ -3330,7 +3328,8 @@ MonoBehaviour:
   upAttackSprite: {fileID: 21300000, guid: c597fc12a41776844a71a7195343eb43, type: 3}
   upHitboxRight: {fileID: 200459933}
   upHitboxLeft: {fileID: 712611576}
-  specialPrefab: {fileID: 3748748625558523987, guid: 9de7dd62f98794444bde8f4c428675e3, type: 3}
+  specialOnlinePrefab: {fileID: 8638113543758831873, guid: 9de7dd62f98794444bde8f4c428675e3, type: 3}
+  specialLocalPrefab: {fileID: 3748748625558523987, guid: 4da608f721847694997a723dbe31f9d0, type: 3}
   firePoint: {fileID: 1480411838}
   upSpecialSprite: {fileID: 21300000, guid: f00bdf752b2f0ef4a96a02839df82d3b, type: 3}
   upSpecialForce: 15
@@ -3348,13 +3347,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerStatus
   playerName: P2
-  totalDamage: 0
-  currentStock: 3
   faceIcon: {fileID: 21300000, guid: 8a289e4c100a4c643bfc72df7985cbf2, type: 3}
-  isStunned: 0
-  isGuarding: 0
-  isShieldBroken: 0
-  isFallingHelpless: 0
+  initialStock: 3
   shrinkSpeed: 4
   recoverSpeed: 2
   frictionlessMaterial: {fileID: 6200000, guid: 3fe9cd846a51e6e478de978aef6be4db, type: 2}

@@ -2,8 +2,9 @@ using UnityEngine;
 using Fusion;
 
 /// <summary>
-/// Step 4 版：被弾通知を RPC_TakeDamage 経由にして、
-/// ダメージ蓄積・ノックバックを被弾側の StateAuthority で実行する。
+/// オンライン／オフライン両モード対応版。
+/// NetworkObject.IsValid を見て、オンライン時のみ HasStateAuthority チェック。
+/// PlayerStatus.TakeDamage / TakeShieldDamage を呼び、これらが内部で RPC/直適用を切替。
 /// </summary>
 public class HitArea : MonoBehaviour
 {
@@ -19,37 +20,45 @@ public class HitArea : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
-        // --- 0. 当たり判定は攻撃側の所有者だけで処理 ---
+        bool isNetworked = false;
+
+        // オンライン中なら攻撃側の StateAuthority だけが当たり判定処理を行う
         if (owner != null)
         {
             var ownerNo = owner.GetComponent<NetworkObject>();
-            if (ownerNo != null && !ownerNo.HasStateAuthority) return;
+            if (ownerNo != null && ownerNo.IsValid)
+            {
+                isNetworked = true;
+                if (!ownerNo.HasStateAuthority) return;
+            }
         }
         else
         {
             var selfNo = GetComponent<NetworkObject>();
-            if (selfNo != null && !selfNo.HasStateAuthority) return;
+            if (selfNo != null && selfNo.IsValid)
+            {
+                isNetworked = true;
+                if (!selfNo.HasStateAuthority) return;
+            }
         }
 
-        // 自分自身にはヒットしない
+        // 自分自身への命中を防ぐ
         if (owner != null && (collision.gameObject == owner || collision.transform.IsChildOf(owner.transform))) return;
 
-        // --- 1. シールド（Shieldレイヤー）への衝突 ---
+        // --- シールド命中 ---
         if (collision.gameObject.layer == LayerMask.NameToLayer("Shield"))
         {
-            // シールド本体に当たった場合、その親キャラの PlayerStatus に通知する
             var shieldedPlayer = collision.GetComponentInParent<PlayerStatus>();
             if (shieldedPlayer != null)
             {
-                shieldedPlayer.RPC_TakeShieldHit(damageValue, guardDamageMultiplier);
+                shieldedPlayer.TakeShieldDamage(damageValue, guardDamageMultiplier);
                 Debug.Log("シールドに命中！");
-
-                if (transform.parent == null) DespawnSelf();
+                if (transform.parent == null) DespawnSelf(isNetworked);
                 return;
             }
         }
 
-        // --- 2. 本体（PlayerStatus）への衝突 ---
+        // --- 本体命中 ---
         PlayerStatus targetStatus = collision.GetComponent<PlayerStatus>();
         if (targetStatus != null && !targetStatus.isStunned)
         {
@@ -63,26 +72,24 @@ public class HitArea : MonoBehaviour
             }
 
             Vector2 finalDirection = new Vector2(knockbackAngle.x * facingDir, knockbackAngle.y);
-
-            // 被弾側の StateAuthority に通知（RPC）
-            targetStatus.RPC_TakeDamage(damageValue, baseKnockback, finalDirection);
+            targetStatus.TakeDamage(damageValue, baseKnockback, finalDirection);
 
             Debug.Log($"本体に命中! damage={damageValue}, dir={finalDirection}");
-
-            if (transform.parent == null) DespawnSelf();
+            if (transform.parent == null) DespawnSelf(isNetworked);
         }
     }
 
-    private void DespawnSelf()
+    private void DespawnSelf(bool isNetworked)
     {
-        var no = GetComponent<NetworkObject>();
-        if (no != null && no.Runner != null && no.HasStateAuthority)
+        if (isNetworked)
         {
-            no.Runner.Despawn(no);
+            var no = GetComponent<NetworkObject>();
+            if (no != null && no.Runner != null && no.HasStateAuthority)
+            {
+                no.Runner.Despawn(no);
+                return;
+            }
         }
-        else if (no == null)
-        {
-            Destroy(gameObject);
-        }
+        Destroy(gameObject);
     }
 }

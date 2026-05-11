@@ -2,7 +2,12 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using UnityEngine.SceneManagement;
+using System.Collections;
 
+/// <summary>
+/// Step 5 版：OK ボタンで NetworkRunner を Shutdown してからシーン遷移する。
+/// （シャットダウンしないと次回 StartGame で「Runner はすでに起動中」エラー）
+/// </summary>
 public class ResultManager : MonoBehaviour
 {
     [Header("UI要素（勝者用）")]
@@ -14,7 +19,12 @@ public class ResultManager : MonoBehaviour
     public TextMeshProUGUI loserText;
 
     [Header("遷移先設定")]
-    public string nextSceneName; // インスペクターで ModeSelectScene か WaitingRoomScene を指定
+    public string nextSceneName;
+
+    [Header("OK ボタン")]
+    public Button okButton;
+
+    private bool isReturning = false;
 
     void Start()
     {
@@ -26,37 +36,38 @@ public class ResultManager : MonoBehaviour
         var data = GameDataContainer.instance;
         if (data == null) return;
 
-        // P1が勝った場合
         if (data.winnerPlayerNum == 1)
         {
-            // 勝者にP1の情報を代入
-            winnerIcon.sprite = data.p1Icon;
-            winnerText.text = "1st " + data.p1Name;
-            // 敗者にP2の情報を代入
-            loserIcon.sprite = data.p2Icon;
-            loserText.text = "2nd " + data.p2Name;
+            if (winnerIcon != null) winnerIcon.sprite = data.p1Icon;
+            if (winnerText != null) winnerText.text = "1st " + data.p1Name;
+            if (loserIcon != null) loserIcon.sprite = data.p2Icon;
+            if (loserText != null) loserText.text = "2nd " + data.p2Name;
         }
-        // P2が勝った場合
         else
         {
-            // 勝者にP2の情報を代入
-            winnerIcon.sprite = data.p2Icon;
-            winnerText.text = "1st " + data.p2Name;
-            // 敗者にP1の情報を代入
-            loserIcon.sprite = data.p1Icon;
-            loserText.text = "2nd " + data.p1Name;
+            if (winnerIcon != null) winnerIcon.sprite = data.p2Icon;
+            if (winnerText != null) winnerText.text = "1st " + data.p2Name;
+            if (loserIcon != null) loserIcon.sprite = data.p1Icon;
+            if (loserText != null) loserText.text = "2nd " + data.p1Name;
         }
     }
 
-    void SetUI(Image img, TextMeshProUGUI txt, Sprite icon, string label)
-    {
-        if (img != null) img.sprite = icon;
-        if (txt != null) txt.text = label;
-    }
-
-    // OKボタンに割り当てる関数
     public void OnOkButtonClicked()
     {
-        SceneManager.LoadScene(nextSceneName);
+        if (isReturning) return;
+        isReturning = true;
+        if (okButton != null) okButton.interactable = false;
+
+        // ★ コルーチンは NetworkLauncher（DDOL）で実行
+        if (NetworkLauncher.Instance != null)
+        {
+            NetworkLauncher.Instance.StartCoroutine(
+                NetworkLauncher.Instance.ShutdownAndLoadScene(nextSceneName, 0f)
+            );
+        }
+        else
+        {
+            SceneManager.LoadScene(nextSceneName);
+        }
     }
 }

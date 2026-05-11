@@ -466,6 +466,11 @@ MonoBehaviour:
   roomName: 
   mySelectedCharID: 0
   isP1: 0
+  winnerPlayerNum: 0
+  p1Icon: {fileID: 0}
+  p2Icon: {fileID: 0}
+  p1Name: 
+  p2Name: 
 --- !u!4 &584481914
 Transform:
   m_ObjectHideFlags: 0

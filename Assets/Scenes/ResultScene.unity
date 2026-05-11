@@ -988,6 +988,7 @@ MonoBehaviour:
   loserIcon: {fileID: 1859210373}
   loserText: {fileID: 153028662}
   nextSceneName: ModeSelectScene
+  okButton: {fileID: 1698965576}
 --- !u!4 &1554905545
 Transform:
   m_ObjectHideFlags: 0

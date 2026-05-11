@@ -4,10 +4,10 @@ using System.Collections;
 using Fusion;
 
 /// <summary>
-/// Step 4 修正版 v2：
-/// - 撃墜判定は Update()（全クライアントで動く）
-/// - リスポーン直後の連続撃墜を防ぐクールダウン
-/// - リスポーン位置を SpawnPoint に変更（場外座標への復活を回避）
+/// Step 5 版：
+/// - 相手が切断したら不戦勝でリザルトへ
+/// - リスポーン処理を rb.position + NetworkTransform.Teleport で確実に
+/// - クールダウンに保険値あり
 /// </summary>
 public class OnlineGameManager : NetworkBehaviour
 {
@@ -39,7 +39,6 @@ public class OnlineGameManager : NetworkBehaviour
     private Transform player2;
     private bool transitioning = false;
 
-    // 連続撃墜防止のためのクールダウン（プレイヤーごと）
     private float p1KillCooldownEnd = 0f;
     private float p2KillCooldownEnd = 0f;
 
@@ -48,8 +47,21 @@ public class OnlineGameManager : NetworkBehaviour
         Instance = this;
     }
 
+    void Start()
+    {
+        // 相手切断のイベントを購読
+        if (NetworkLauncher.Instance != null)
+        {
+            NetworkLauncher.Instance.OnOpponentDisconnected += HandleOpponentDisconnected;
+        }
+    }
+
     void OnDestroy()
     {
+        if (NetworkLauncher.Instance != null)
+        {
+            NetworkLauncher.Instance.OnOpponentDisconnected -= HandleOpponentDisconnected;
+        }
         if (Instance == this) Instance = null;
     }
 
@@ -83,7 +95,7 @@ public class OnlineGameManager : NetworkBehaviour
         if (Object != null && Object.IsValid && WinnerPlayerNum != 0)
         {
             transitioning = true;
-            TriggerGameOver();
+            TriggerGameOver(viaNetworkSync: true);
         }
     }
 
@@ -92,10 +104,8 @@ public class OnlineGameManager : NetworkBehaviour
         var no = player.GetComponent<NetworkObject>();
         if (no == null || !no.HasStateAuthority) return;
 
-        // Inspector で 0 にされていた場合の保険
         float invulnTime = respawnInvulnerability > 0f ? respawnInvulnerability : 1.5f;
 
-        // ★ クールダウン中は判定スキップ
         float now = Time.time;
         if (isP1 && now < p1KillCooldownEnd) return;
         if (!isP1 && now < p2KillCooldownEnd) return;
@@ -103,7 +113,6 @@ public class OnlineGameManager : NetworkBehaviour
         Vector3 pos = player.position;
         if (pos.x < limitLeft || pos.x > limitRight || pos.y > limitUp || pos.y < limitDown)
         {
-            // ★ クールダウン開始
             if (isP1) p1KillCooldownEnd = now + invulnTime;
             else p2KillCooldownEnd = now + invulnTime;
 
@@ -127,11 +136,9 @@ public class OnlineGameManager : NetworkBehaviour
         }
         else
         {
-            // ★ リスポーン位置：SpawnPoint があればそちら、無ければ画面中央上空
             Transform sp = isP1 ? spawnPoint1 : spawnPoint2;
             Vector3 respawnPos = (sp != null) ? sp.position : new Vector3(0, 0f, 0);
 
-            // 1) Rigidbody2D.position を直接動かす（物理空間でテレポート）
             var rb = player.GetComponent<Rigidbody2D>();
             if (rb != null)
             {
@@ -139,16 +146,10 @@ public class OnlineGameManager : NetworkBehaviour
                 rb.linearVelocity = Vector2.zero;
                 rb.angularVelocity = 0f;
             }
-
-            // 2) Transform も明示的に更新
             player.position = respawnPos;
 
-            // 3) NetworkTransform.Teleport() でネットワーク的にもテレポートを通知
             var nt = player.GetComponent<Fusion.NetworkTransform>();
-            if (nt != null)
-            {
-                nt.Teleport(respawnPos);
-            }
+            if (nt != null) nt.Teleport(respawnPos);
 
             Debug.Log($"[OnlineGameManager] {player.name} リスポーン → {respawnPos}");
         }
@@ -161,31 +162,70 @@ public class OnlineGameManager : NetworkBehaviour
         WinnerPlayerNum = winner;
     }
 
-    private void TriggerGameOver()
+    /// <summary>
+    /// 相手切断時のハンドラー：自分の勝ちにしてローカルでリザルトへ遷移。
+    /// 相手がいないので Runner.LoadScene は使えない（自分だけで遷移）。
+    /// </summary>
+    private void HandleOpponentDisconnected()
+    {
+        if (transitioning) return;
+        transitioning = true;
+
+        bool myIsP1 = (GameDataContainer.instance != null) && GameDataContainer.instance.isP1;
+        int winner = myIsP1 ? 1 : 2;
+
+        Debug.Log($"[OnlineGameManager] 相手が切断 → 不戦勝 (P{winner})");
+
+        SaveGameOverInfo(winner);
+
+        // ★ コルーチンは NetworkLauncher（DDOL）で実行。
+        //   Shutdown 時に OnlineGameManager が破棄されてもシーン遷移は走り切る。
+        if (NetworkLauncher.Instance != null)
+        {
+            NetworkLauncher.Instance.StartCoroutine(
+                NetworkLauncher.Instance.ShutdownAndLoadScene(resultSceneName, 1.5f)
+            );
+        }
+        else
+        {
+            SceneManager.LoadScene(resultSceneName);
+        }
+    }
+
+    private void TriggerGameOver(bool viaNetworkSync)
     {
         Debug.Log($"[OnlineGameManager] Game Over! Winner = P{WinnerPlayerNum}");
+        SaveGameOverInfo(WinnerPlayerNum);
 
-        if (GameDataContainer.instance != null && player1 != null && player2 != null)
+        // マスターが代表でシーン遷移（全員追従）
+        if (viaNetworkSync && Runner != null && Runner.IsSharedModeMasterClient)
         {
-            GameDataContainer.instance.winnerPlayerNum = WinnerPlayerNum;
+            StartCoroutine(WaitAndLoadResult());
+        }
+    }
 
+    private void SaveGameOverInfo(int winner)
+    {
+        if (GameDataContainer.instance == null) return;
+        GameDataContainer.instance.winnerPlayerNum = winner;
+
+        if (player1 != null)
+        {
             var p1Status = player1.GetComponent<PlayerStatus>();
-            var p2Status = player2.GetComponent<PlayerStatus>();
-            if (p1Status != null)
+            if (p1Status != null && p1Status.Object != null)
             {
                 GameDataContainer.instance.p1Icon = p1Status.faceIcon;
                 GameDataContainer.instance.p1Name = p1Status.playerName;
             }
-            if (p2Status != null)
+        }
+        if (player2 != null)
+        {
+            var p2Status = player2.GetComponent<PlayerStatus>();
+            if (p2Status != null && p2Status.Object != null)
             {
                 GameDataContainer.instance.p2Icon = p2Status.faceIcon;
                 GameDataContainer.instance.p2Name = p2Status.playerName;
             }
-        }
-
-        if (Runner != null && Runner.IsSharedModeMasterClient)
-        {
-            StartCoroutine(WaitAndLoadResult());
         }
     }
 
@@ -211,4 +251,14 @@ public class OnlineGameManager : NetworkBehaviour
         Gizmos.DrawLine(new Vector3(limitLeft, limitDown, 0), new Vector3(limitLeft, limitUp, 0));
     }
 #endif
+}
+
+// ---- 簡易ヘルパー：Task をコルーチン待ちに変換 ----
+internal static class TaskCoroutineExt
+{
+    public static IEnumerator AsCoroutine(this System.Threading.Tasks.Task task)
+    {
+        while (!task.IsCompleted) yield return null;
+        if (task.IsFaulted) Debug.LogException(task.Exception);
+    }
 }

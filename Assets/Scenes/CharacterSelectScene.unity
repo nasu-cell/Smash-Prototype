@@ -174,7 +174,7 @@ GameObject:
   - component: {fileID: 156149919}
   - component: {fileID: 156149918}
   m_Layer: 0
-  m_Name: NeeworkLauncher
+  m_Name: NetworkLauncher
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -192,6 +192,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c6dd8efb349a9c74b9c4bea783016282, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NetworkLauncher
+  lobbyInfoPrefab: {fileID: 1032939192588225110, guid: 6b8e762ccf3822546bf86d1276d524d1, type: 3}
   battleSceneName: OnlineBattleScene
   characterPrefabs:
   - {fileID: 5001918043449396130, guid: 55b964fbaf0dc0240b8b57f3ab1d1987, type: 3}

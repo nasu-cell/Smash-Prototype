@@ -3,9 +3,11 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// READY を押した時点で NetworkLauncher.StartGame(roomName) を呼んで部屋に参加。
-/// 2 人揃ったら NetworkLauncher 側がシーン遷移を行うので、ここでは
-/// SceneManager.LoadScene を呼ばないことに注意。
+/// 新しい流れ：
+/// - シーン入室で自動接続
+/// - 両者の PlayerLobbyInfo を表示
+/// - READY ボタンで自分の IsReady をトグル
+/// - 両者の IsReady が true になったらマスターがバトル開始
 /// </summary>
 public class WaitingRoomManager : MonoBehaviour
 {
@@ -20,13 +22,16 @@ public class WaitingRoomManager : MonoBehaviour
     [Header("共通UI")]
     public TextMeshProUGUI readyButtonText;
     public Button readyButton;
-    public TextMeshProUGUI statusText; // 任意：「相手を待っています」など表示
+    public TextMeshProUGUI statusText;
 
     [Header("キャラ画像リスト")]
     public Sprite[] characterSprites;
 
-    private bool isReady = false;
+    private PlayerLobbyInfo myInfo;
+    private PlayerLobbyInfo opponentInfo;
+    private bool battleStarted = false;
     private bool isConnecting = false;
+    private bool myReady = false;
 
     void Start()
     {
@@ -40,41 +45,39 @@ public class WaitingRoomManager : MonoBehaviour
             }
         }
 
-        // 初期状態
         if (enemyReadyBadge != null) enemyReadyBadge.color = Color.gray;
         if (myReadyBadge != null) myReadyBadge.color = Color.gray;
-        SetStatus("");
+        if (readyButton != null) readyButton.interactable = false; // 接続まで無効
+        if (readyButtonText != null) readyButtonText.text = "READY?";
 
-        // NetworkLauncher のイベントを購読（接続後の人数更新を受け取る）
+        // NetworkLauncher のイベントを購読
         if (NetworkLauncher.Instance != null)
         {
-            NetworkLauncher.Instance.OnPlayerCountChanged += HandlePlayerCountChanged;
+            NetworkLauncher.Instance.OnOpponentDisconnected += HandleOpponentDisconnected;
         }
+
+        // ★ 入室と同時に自動接続
+        AutoConnect();
     }
 
     void OnDestroy()
     {
         if (NetworkLauncher.Instance != null)
         {
-            NetworkLauncher.Instance.OnPlayerCountChanged -= HandlePlayerCountChanged;
+            NetworkLauncher.Instance.OnOpponentDisconnected -= HandleOpponentDisconnected;
         }
     }
 
-    public async void OnClickReady()
+    private async void AutoConnect()
     {
-        if (isReady || isConnecting) return;
-        isReady = true;
+        if (isConnecting) return;
         isConnecting = true;
-
-        if (myReadyBadge != null) myReadyBadge.color = Color.green;
-        if (readyButtonText != null) readyButtonText.text = "READY OK!";
-        if (readyButton != null) readyButton.interactable = false;
         SetStatus("接続中...");
 
         if (NetworkLauncher.Instance == null)
         {
-            Debug.LogError("NetworkLauncher が見つかりません。最初のシーンに 1 つ配置してください。");
-            ResetReady();
+            Debug.LogError("NetworkLauncher が見つかりません。");
+            SetStatus("接続失敗：NetworkLauncher 未配置");
             return;
         }
 
@@ -85,31 +88,96 @@ public class WaitingRoomManager : MonoBehaviour
         bool ok = await NetworkLauncher.Instance.StartGame(roomName);
         if (!ok)
         {
-            SetStatus("接続失敗。もう一度試してください。");
-            ResetReady();
+            SetStatus("接続失敗。タイトルに戻ってもう一度試してください。");
             return;
         }
 
         SetStatus("相手を待っています...");
-        // この後、相手が参加→マスターが LoadScene→OnlineBattleScene へ自動遷移
+        // 接続完了したので READY ボタンを有効化
+        if (readyButton != null) readyButton.interactable = true;
     }
 
-    private void HandlePlayerCountChanged(int count)
+    public void OnClickReady()
     {
-        if (enemyReadyBadge != null && count >= 2)
+        if (myInfo == null)
         {
-            enemyReadyBadge.color = Color.green;
-            SetStatus("対戦相手が見つかりました！");
+            Debug.LogWarning("[WaitingRoomManager] まだ自分の PlayerLobbyInfo が未登録です。");
+            return;
+        }
+
+        myReady = !myReady;
+        myInfo.SetReady(myReady);
+
+        if (myReadyBadge != null) myReadyBadge.color = myReady ? Color.green : Color.gray;
+        if (readyButtonText != null) readyButtonText.text = myReady ? "READY OK!" : "READY?";
+
+        Debug.Log($"[WaitingRoomManager] 自分の READY = {myReady}");
+    }
+
+    /// <summary>
+    /// PlayerLobbyInfo.Spawned() から呼ばれる。
+    /// 自分のものなら myInfo に、相手のものなら opponentInfo に保存。
+    /// </summary>
+    public void RegisterLobbyInfo(PlayerLobbyInfo info)
+    {
+        if (info == null) return;
+
+        if (info.HasInputAuthority)
+        {
+            myInfo = info;
+            Debug.Log("[WaitingRoomManager] 自分の LobbyInfo を保持");
+        }
+        else
+        {
+            opponentInfo = info;
+            int id = info.CharacterId;
+            if (id >= 0 && id < characterSprites.Length && enemyCharImage != null)
+            {
+                enemyCharImage.sprite = characterSprites[id];
+                Debug.Log($"[WaitingRoomManager] 相手アイコン表示 (CharId={id})");
+            }
+            SetStatus("対戦相手が入室しました。両者 READY でバトル開始！");
         }
     }
 
-    private void ResetReady()
+    void Update()
     {
-        isReady = false;
-        isConnecting = false;
+        // 相手の READY バッジ更新
+        if (opponentInfo != null && opponentInfo.Object != null && opponentInfo.Object.IsValid)
+        {
+            bool oppReady = (bool)opponentInfo.IsReady;
+            if (enemyReadyBadge != null)
+            {
+                enemyReadyBadge.color = oppReady ? Color.green : Color.gray;
+            }
+        }
+
+        // 両者 READY 確認（マスターのみシーン遷移発火）
+        if (battleStarted) return;
+        if (NetworkLauncher.Instance?.Runner == null) return;
+        if (!NetworkLauncher.Instance.Runner.IsSharedModeMasterClient) return;
+        if (myInfo == null || opponentInfo == null) return;
+        if (myInfo.Object == null || !myInfo.Object.IsValid) return;
+        if (opponentInfo.Object == null || !opponentInfo.Object.IsValid) return;
+
+        if ((bool)myInfo.IsReady && (bool)opponentInfo.IsReady)
+        {
+            battleStarted = true;
+            Debug.Log("[WaitingRoomManager] 両者 READY → バトル遷移リクエスト");
+            NetworkLauncher.Instance.RequestBattleSceneLoad();
+        }
+    }
+
+    private void HandleOpponentDisconnected()
+    {
+        SetStatus("相手が切断しました。タイトルに戻って再接続してください。");
+        if (enemyReadyBadge != null) enemyReadyBadge.color = Color.gray;
+        if (enemyCharImage != null) enemyCharImage.sprite = null;
+        opponentInfo = null;
+        myReady = false;
         if (myReadyBadge != null) myReadyBadge.color = Color.gray;
         if (readyButtonText != null) readyButtonText.text = "READY?";
-        if (readyButton != null) readyButton.interactable = true;
+        if (myInfo != null) myInfo.SetReady(false);
     }
 
     private void SetStatus(string s)

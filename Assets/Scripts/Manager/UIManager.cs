@@ -69,9 +69,8 @@ public class UIManager : MonoBehaviour
     private void UpdateUI(PlayerUIComponents ui)
     {
         if (ui.status == null) return;
-
-        // ★ Step 4 追加：Despawn 済みなら何もしない（シーン遷移時の例外回避）
-        if (ui.status.Object == null) return;
+        // PlayerStatus のラッパープロパティはオンライン/オフライン両方で安全に読めるので、
+        // Object null チェックは不要（offline で UI が止まる原因になる）
 
         // 1. ダメージ表示の更新
         if (ui.damageText != null)

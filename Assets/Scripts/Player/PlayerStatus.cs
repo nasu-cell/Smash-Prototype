@@ -2,9 +2,9 @@ using UnityEngine;
 using Fusion;
 
 /// <summary>
-/// Step 4 版：NetworkBehaviour 化。
-/// ダメージ %、ストック、各種フラグ、シールド耐久値をネットワーク同期。
-/// 被弾は HitArea から RPC_TakeDamage 経由で被弾側の StateAuthority に通知。
+/// オンライン（NetworkRunner あり）／オフライン（Training）両モード対応版。
+/// - Spawned() が呼ばれた場合 → useNetworked = true → [Networked] プロパティで同期
+/// - そうでない場合 → useNetworked = false → ローカルフィールドのみ使用
 /// </summary>
 public class PlayerStatus : NetworkBehaviour
 {
@@ -12,15 +12,6 @@ public class PlayerStatus : NetworkBehaviour
     public string playerName = "P1";
     public Sprite faceIcon;
     public int initialStock = 3;
-
-    // ===== Networked state（全クライアントで同じ値が見える） =====
-    [Networked] public float totalDamage { get; set; }
-    [Networked] public int currentStock { get; set; }
-    [Networked] public NetworkBool isStunned { get; set; }
-    [Networked] public NetworkBool isGuarding { get; set; }
-    [Networked] public NetworkBool isShieldBroken { get; set; }
-    [Networked] public NetworkBool isFallingHelpless { get; set; }
-    [Networked] public float shieldScale { get; set; }
 
     [Header("シールド設定")]
     public float shrinkSpeed;
@@ -30,6 +21,73 @@ public class PlayerStatus : NetworkBehaviour
     public PhysicsMaterial2D frictionlessMaterial;
     public PhysicsMaterial2D highFrictionMaterial;
 
+    // ===== オフライン用ローカルフィールド =====
+    private float _localTotalDamage;
+    private int _localCurrentStock = 3;
+    private bool _localIsStunned;
+    private bool _localIsGuarding;
+    private bool _localIsShieldBroken;
+    private bool _localIsFallingHelpless;
+    private float _localShieldScale;
+
+    // ===== オンライン用 Networked =====
+    [Networked] private float NetTotalDamage { get; set; }
+    [Networked] private int NetCurrentStock { get; set; }
+    [Networked] private NetworkBool NetIsStunned { get; set; }
+    [Networked] private NetworkBool NetIsGuarding { get; set; }
+    [Networked] private NetworkBool NetIsShieldBroken { get; set; }
+    [Networked] private NetworkBool NetIsFallingHelpless { get; set; }
+    [Networked] private float NetShieldScale { get; set; }
+
+    private bool useNetworked = false;
+
+    // Networked プロパティが安全に読めるかを判定
+    private bool IsNetActive => useNetworked && Object != null && Object.IsValid;
+
+    // ===== 公開プロパティ =====
+    public float totalDamage
+    {
+        get => IsNetActive ? NetTotalDamage : _localTotalDamage;
+        set { _localTotalDamage = value; if (IsNetActive && HasStateAuthority) NetTotalDamage = value; }
+    }
+
+    public int currentStock
+    {
+        get => IsNetActive ? NetCurrentStock : _localCurrentStock;
+        set { _localCurrentStock = value; if (IsNetActive && HasStateAuthority) NetCurrentStock = value; }
+    }
+
+    public bool isStunned
+    {
+        get => IsNetActive ? (bool)NetIsStunned : _localIsStunned;
+        set { _localIsStunned = value; if (IsNetActive && HasStateAuthority) NetIsStunned = value; }
+    }
+
+    public bool isGuarding
+    {
+        get => IsNetActive ? (bool)NetIsGuarding : _localIsGuarding;
+        set { _localIsGuarding = value; if (IsNetActive && HasStateAuthority) NetIsGuarding = value; }
+    }
+
+    public bool isShieldBroken
+    {
+        get => IsNetActive ? (bool)NetIsShieldBroken : _localIsShieldBroken;
+        set { _localIsShieldBroken = value; if (IsNetActive && HasStateAuthority) NetIsShieldBroken = value; }
+    }
+
+    public bool isFallingHelpless
+    {
+        get => IsNetActive ? (bool)NetIsFallingHelpless : _localIsFallingHelpless;
+        set { _localIsFallingHelpless = value; if (IsNetActive && HasStateAuthority) NetIsFallingHelpless = value; }
+    }
+
+    public float shieldScale
+    {
+        get => IsNetActive ? NetShieldScale : _localShieldScale;
+        set { _localShieldScale = value; if (IsNetActive && HasStateAuthority) NetShieldScale = value; }
+    }
+
+    // ===== 内部参照 =====
     private KnockbackCalculator calculator;
     private Rigidbody2D rb;
     private GuardShield shield;
@@ -37,25 +95,50 @@ public class PlayerStatus : NetworkBehaviour
     private ActorController actorController;
     private SpriteRenderer sr;
 
-    // Fusion 流のタイマー（Invoke の代わり）
     private TickTimer breakRecoverTimer;
     private TickTimer stunRecoverTimer;
+    private bool refsInitialized = false;
 
-    public override void Spawned()
+    private void InitializeReferences()
     {
+        if (refsInitialized) return;
+        refsInitialized = true;
         calculator = new KnockbackCalculator();
         rb = GetComponent<Rigidbody2D>();
         shield = GetComponentInChildren<GuardShield>(true);
         myCollider = GetComponent<CapsuleCollider2D>();
         actorController = GetComponent<ActorController>();
         sr = GetComponent<SpriteRenderer>();
+    }
+
+    void Start()
+    {
+        InitializeReferences();
+
+        // Spawned() がまだ呼ばれてなければオフライン初期化
+        if (!useNetworked)
+        {
+            _localCurrentStock = initialStock;
+            _localTotalDamage = 0;
+            _localShieldScale = shield != null ? shield.maxScale : 1f;
+        }
+
+        if (myCollider != null && frictionlessMaterial != null)
+        {
+            myCollider.sharedMaterial = frictionlessMaterial;
+        }
+    }
+
+    public override void Spawned()
+    {
+        useNetworked = true;
+        InitializeReferences();
 
         if (myCollider != null && frictionlessMaterial != null)
         {
             myCollider.sharedMaterial = frictionlessMaterial;
         }
 
-        // 初期値は StateAuthority だけが設定
         if (HasStateAuthority)
         {
             currentStock = initialStock;
@@ -64,26 +147,13 @@ public class PlayerStatus : NetworkBehaviour
         }
     }
 
+    // ===== オンライン用 =====
     public override void FixedUpdateNetwork()
     {
-        if (!HasStateAuthority) return;
-        if (shield == null) return;
+        if (!useNetworked || !HasStateAuthority || shield == null) return;
 
-        // シールドサイズの更新
-        if (isGuarding && !isShieldBroken)
-        {
-            shieldScale = Mathf.Clamp(shieldScale - shrinkSpeed * Runner.DeltaTime, shield.minScale, shield.maxScale);
-            if (shieldScale <= shield.minScale)
-            {
-                ShieldBreak();
-            }
-        }
-        else if (!isShieldBroken)
-        {
-            shieldScale = Mathf.Clamp(shieldScale + recoverSpeed * Runner.DeltaTime, shield.minScale, shield.maxScale);
-        }
+        UpdateShieldLogic(Runner.DeltaTime);
 
-        // タイマー満了による状態復帰
         if (breakRecoverTimer.Expired(Runner))
         {
             isShieldBroken = false;
@@ -91,23 +161,45 @@ public class PlayerStatus : NetworkBehaviour
             shieldScale = shield.maxScale;
             breakRecoverTimer = TickTimer.None;
         }
-
         if (stunRecoverTimer.Expired(Runner))
         {
-            if (!isShieldBroken)
-            {
-                isStunned = false;
-            }
+            if (!isShieldBroken) isStunned = false;
             stunRecoverTimer = TickTimer.None;
         }
     }
 
     public override void Render()
     {
-        // 視覚更新は全クライアントで実行
+        if (!useNetworked) return;
         UpdatePhysicsMaterial();
         UpdateShieldVisual();
         UpdateBodyColor();
+    }
+
+    // ===== オフライン用 =====
+    void Update()
+    {
+        if (useNetworked) return;
+        if (shield == null) return;
+
+        UpdatePhysicsMaterial();
+        UpdateShieldVisual();
+        UpdateBodyColor();
+        UpdateShieldLogic(Time.deltaTime);
+    }
+
+    // ===== 共通ロジック =====
+    private void UpdateShieldLogic(float deltaTime)
+    {
+        if (isGuarding && !isShieldBroken)
+        {
+            shieldScale = Mathf.Clamp(shieldScale - shrinkSpeed * deltaTime, shield.minScale, shield.maxScale);
+            if (shieldScale <= shield.minScale) ShieldBreak();
+        }
+        else if (!isShieldBroken)
+        {
+            shieldScale = Mathf.Clamp(shieldScale + recoverSpeed * deltaTime, shield.minScale, shield.maxScale);
+        }
     }
 
     private void UpdateShieldVisual()
@@ -127,32 +219,50 @@ public class PlayerStatus : NetworkBehaviour
     private void UpdatePhysicsMaterial()
     {
         if (myCollider == null || actorController == null) return;
-
         if (actorController.isGround && (isGuarding || isShieldBroken))
-        {
             myCollider.sharedMaterial = highFrictionMaterial;
-        }
         else
-        {
             myCollider.sharedMaterial = frictionlessMaterial;
-        }
     }
 
     public void ShieldBreak()
     {
-        if (!HasStateAuthority) return;
         isShieldBroken = true;
         isGuarding = false;
         isStunned = true;
         if (rb != null) rb.linearVelocity = Vector2.zero;
-        breakRecoverTimer = TickTimer.CreateFromSeconds(Runner, 3.0f);
+
+        if (useNetworked)
+            breakRecoverTimer = TickTimer.CreateFromSeconds(Runner, 3.0f);
+        else
+        {
+            CancelInvoke("RecoverFromBreak");
+            Invoke("RecoverFromBreak", 3.0f);
+        }
     }
 
-    /// <summary>
-    /// 攻撃側の HitArea から呼ばれる。被弾側の StateAuthority で実行される。
-    /// </summary>
+    void RecoverFromBreak()
+    {
+        if (useNetworked) return;
+        isShieldBroken = false;
+        isStunned = false;
+        if (shield != null) shieldScale = shield.maxScale;
+    }
+
+    /// <summary>HitArea から呼ばれる統一エントリ。モードに応じて RPC/直適用を切替。</summary>
+    public void TakeDamage(float baseDamage, float baseKnockback, Vector2 direction)
+    {
+        if (useNetworked) RPC_TakeDamage(baseDamage, baseKnockback, direction);
+        else ApplyDamage(baseDamage, baseKnockback, direction);
+    }
+
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_TakeDamage(float baseDamage, float baseKnockback, Vector2 direction)
+    {
+        ApplyDamage(baseDamage, baseKnockback, direction);
+    }
+
+    private void ApplyDamage(float baseDamage, float baseKnockback, Vector2 direction)
     {
         if (isShieldBroken) return;
 
@@ -167,26 +277,42 @@ public class PlayerStatus : NetworkBehaviour
             rb.AddForce(direction.normalized * finalForce, ForceMode2D.Impulse);
         }
 
-        stunRecoverTimer = TickTimer.CreateFromSeconds(Runner, 0.5f);
+        if (useNetworked)
+            stunRecoverTimer = TickTimer.CreateFromSeconds(Runner, 0.5f);
+        else
+        {
+            CancelInvoke("Recover");
+            Invoke("Recover", 0.5f);
+        }
     }
 
-    /// <summary>
-    /// シールドに攻撃が当たった時。被弾側の StateAuthority で実行される。
-    /// </summary>
+    void Recover()
+    {
+        if (useNetworked) return;
+        if (!isShieldBroken) isStunned = false;
+    }
+
+    public void TakeShieldDamage(float damage, float multiplier)
+    {
+        if (useNetworked) RPC_TakeShieldHit(damage, multiplier);
+        else ApplyShieldDamage(damage, multiplier);
+    }
+
     [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
     public void RPC_TakeShieldHit(float damage, float multiplier)
+    {
+        ApplyShieldDamage(damage, multiplier);
+    }
+
+    private void ApplyShieldDamage(float damage, float multiplier)
     {
         if (shield == null) return;
         shieldScale = Mathf.Clamp(shieldScale - damage * multiplier, shield.minScale, shield.maxScale);
     }
 
-    /// <summary>
-    /// 撃墜（場外）時に OnlineGameManager から呼ばれる。
-    /// 必ず player の StateAuthority クライアントで呼ぶこと。
-    /// </summary>
     public void OnKilled()
     {
-        if (!HasStateAuthority) return;
+        if (useNetworked && !HasStateAuthority) return;
         currentStock--;
         totalDamage = 0;
         isFallingHelpless = false;

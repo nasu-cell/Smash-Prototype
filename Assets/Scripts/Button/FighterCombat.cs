@@ -3,10 +3,9 @@ using System.Collections;
 using Fusion;
 
 /// <summary>
-/// Step 3 版：NetworkBehaviour 化。
-/// - 通常攻撃（横/上）は所有者から RPC を発行し、全クライアントで同じ視覚効果を再生
-/// - 必殺技の弾は所有者だけが Runner.Spawn で生成（NetworkObject として全員に伝播）
-/// - 当たり判定の発火は HitArea 側で StateAuthority チェック
+/// オンライン／オフライン両モード対応版。
+/// Spawned() が呼ばれていればオンライン（RPC + Runner.Spawn）、
+/// そうでなければオフライン（直接 StartCoroutine + Instantiate）。
 /// </summary>
 public class FighterCombat : NetworkBehaviour
 {
@@ -25,8 +24,12 @@ public class FighterCombat : NetworkBehaviour
     public GameObject upHitboxLeft;
 
     [Header("必殺技設定")]
-    [Tooltip("ルートに NetworkObject + NetworkTransform が付いた弾 Prefab を登録")]
-    public NetworkObject specialPrefab;
+    [Tooltip("オンライン用：NetworkObject + NetworkTransform が付いた Prefab (Special_online)")]
+    public NetworkObject specialOnlinePrefab;
+
+    [Tooltip("ローカル用：通常の弾 Prefab (Special)")]
+    public GameObject specialLocalPrefab;
+
     public Transform firePoint;
 
     [Header("上必殺技設定")]
@@ -35,16 +38,18 @@ public class FighterCombat : NetworkBehaviour
     public float sideSpecialForce = 5f;
 
     private bool isAttacking = false;
+    private bool useNetworked = false;
 
     void Start()
     {
         playerStatus = GetComponent<PlayerStatus>();
         DeactivateAllHitboxes();
+        if (normalSprite == null && spriteRenderer != null) normalSprite = spriteRenderer.sprite;
+    }
 
-        if (normalSprite == null && spriteRenderer != null)
-        {
-            normalSprite = spriteRenderer.sprite;
-        }
+    public override void Spawned()
+    {
+        useNetworked = true;
     }
 
     private void DeactivateAllHitboxes()
@@ -55,45 +60,83 @@ public class FighterCombat : NetworkBehaviour
         if (upHitboxLeft) upHitboxLeft.SetActive(false);
     }
 
-    // ===== 入力エントリポイント（ActorController から呼ばれる） =====
+    // ===== 入力エントリ =====
 
     public void PerformSideAttack(bool isRight)
     {
         if (isAttacking) return;
-        if (!Object.HasStateAuthority) return;
-        RPC_PlaySideAttack(isRight);
+        if (useNetworked)
+        {
+            if (!HasStateAuthority) return;
+            RPC_PlaySideAttack(isRight);
+        }
+        else
+        {
+            GameObject hb = isRight ? sideHitboxRight : sideHitboxLeft;
+            StartCoroutine(AttackRoutine(sideAttackSprite, hb, isRight));
+        }
     }
 
     public void PerformUpAttack(bool isRight)
     {
         if (isAttacking) return;
-        if (!Object.HasStateAuthority) return;
-        RPC_PlayUpAttack(isRight);
+        if (useNetworked)
+        {
+            if (!HasStateAuthority) return;
+            RPC_PlayUpAttack(isRight);
+        }
+        else
+        {
+            GameObject hb = isRight ? upHitboxRight : upHitboxLeft;
+            StartCoroutine(AttackRoutine(upAttackSprite, hb, isRight));
+        }
     }
 
     public void PerformSpecial(bool isRight)
     {
         if (isAttacking || playerStatus.isFallingHelpless) return;
-        if (!Object.HasStateAuthority) return;
 
-        if (specialPrefab == null || firePoint == null)
+        if (firePoint == null)
         {
-            Debug.LogWarning("specialPrefab または firePoint が未設定");
+            Debug.LogError("firePoint が未設定です");
             return;
         }
 
-        // 弾は NetworkObject として Runner.Spawn → 全員に伝播
-        var bullet = Runner.Spawn(specialPrefab, firePoint.position, Quaternion.identity, Object.InputAuthority);
-
-        // 速度設定（所有者側で初速を入れる。NetworkTransform で位置同期される）
-        var rb = bullet.GetComponent<Rigidbody2D>();
-        if (rb != null)
+        if (useNetworked)
         {
-            float speed = 15f;
-            rb.linearVelocity = new Vector2(isRight ? speed : -speed, 0f);
-        }
+            // オンラインモード
+            if (!HasStateAuthority) return;
+            if (specialOnlinePrefab == null)
+            {
+                Debug.LogError("specialOnlinePrefab が未設定です");
+                return;
+            }
 
-        // HitArea の owner を設定（自分への命中防止用）
+            var bullet = Runner.Spawn(specialOnlinePrefab, firePoint.position, Quaternion.identity, Object.InputAuthority);
+            ApplyBulletSettings(bullet.gameObject, isRight);
+            Debug.Log("[FighterCombat] オンライン弾 (Special_online) 発射");
+        }
+        else
+        {
+            // ローカルモード
+            if (specialLocalPrefab == null)
+            {
+                Debug.LogError("specialLocalPrefab が未設定です");
+                return;
+            }
+
+            var bulletObj = Instantiate(specialLocalPrefab, firePoint.position, Quaternion.identity);
+            ApplyBulletSettings(bulletObj, isRight);
+            Debug.Log("[FighterCombat] ローカル弾 (Special) 発射");
+        }
+    }
+
+    // 弾の共通設定（速度・オーナー）をまとめたメソッド
+    private void ApplyBulletSettings(GameObject bullet, bool isRight)
+    {
+        var rb = bullet.GetComponent<Rigidbody2D>();
+        if (rb != null) rb.linearVelocity = new Vector2(isRight ? 15f : -15f, 0f);
+
         var hit = bullet.GetComponent<HitArea>();
         if (hit != null) hit.owner = this.gameObject;
     }
@@ -101,24 +144,31 @@ public class FighterCombat : NetworkBehaviour
     public void PerformUpSpecial(bool isRight)
     {
         if (isAttacking || playerStatus.isFallingHelpless) return;
-        if (!Object.HasStateAuthority) return;
-        RPC_PlayUpSpecial(isRight);
+        if (useNetworked)
+        {
+            if (!HasStateAuthority) return;
+            RPC_PlayUpSpecial(isRight);
+        }
+        else
+        {
+            StartCoroutine(UpSpecialRoutine(isRight));
+        }
     }
 
-    // ===== RPC：全クライアントで視覚効果を再生 =====
+    // ===== RPC（オンライン専用） =====
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     private void RPC_PlaySideAttack(NetworkBool isRight)
     {
-        GameObject targetHitbox = isRight ? sideHitboxRight : sideHitboxLeft;
-        StartCoroutine(AttackRoutine(sideAttackSprite, targetHitbox, isRight));
+        GameObject hb = isRight ? sideHitboxRight : sideHitboxLeft;
+        StartCoroutine(AttackRoutine(sideAttackSprite, hb, isRight));
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
     private void RPC_PlayUpAttack(NetworkBool isRight)
     {
-        GameObject targetHitbox = isRight ? upHitboxRight : upHitboxLeft;
-        StartCoroutine(AttackRoutine(upAttackSprite, targetHitbox, isRight));
+        GameObject hb = isRight ? upHitboxRight : upHitboxLeft;
+        StartCoroutine(AttackRoutine(upAttackSprite, hb, isRight));
     }
 
     [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
@@ -127,12 +177,11 @@ public class FighterCombat : NetworkBehaviour
         StartCoroutine(UpSpecialRoutine(isRight));
     }
 
-    // ===== 視覚効果コルーチン（全クライアントで動く） =====
+    // ===== 共通コルーチン =====
 
     private IEnumerator AttackRoutine(Sprite attackSprite, GameObject hitbox, bool isRight)
     {
         isAttacking = true;
-
         spriteRenderer.sprite = attackSprite;
         spriteRenderer.flipX = !isRight;
 
@@ -147,7 +196,6 @@ public class FighterCombat : NetworkBehaviour
 
         if (hitbox != null) hitbox.SetActive(false);
         spriteRenderer.sprite = normalSprite;
-
         isAttacking = false;
     }
 
@@ -155,8 +203,8 @@ public class FighterCombat : NetworkBehaviour
     {
         isAttacking = true;
 
-        // しりもち落下フラグは所有者側で立てる
-        if (Object.HasStateAuthority)
+        // しりもち落下フラグはオンラインなら StateAuthority のみ、オフラインなら誰でも
+        if (!useNetworked || HasStateAuthority)
         {
             playerStatus.isFallingHelpless = true;
         }
@@ -164,10 +212,9 @@ public class FighterCombat : NetworkBehaviour
         spriteRenderer.sprite = upSpecialSprite;
         spriteRenderer.flipX = !isRight;
 
-        // 物理上昇は所有者側だけ実行（リモートは NetworkTransform で位置追従）
-        if (Object.HasStateAuthority)
+        if (!useNetworked || HasStateAuthority)
         {
-            Rigidbody2D rb = GetComponent<Rigidbody2D>();
+            var rb = GetComponent<Rigidbody2D>();
             if (rb != null)
             {
                 float xVel = isRight ? sideSpecialForce : -sideSpecialForce;
