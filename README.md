@@ -184,16 +184,18 @@ Assets/Scripts/
 - Unity 6000.3.11f1
 - Photon Fusion 2 SDK（要 App ID 設定）
 
-### 手順
+### 🎮 プレイ方法
+以下のいずれかの方法でゲームを体験できます。
 
-1. リポジトリをクローン
-   ```
-   git clone https://github.com/nasu-cell/Smash-Prototype.git
-   ```
+**A. エディタで実行する場合（開発者向け）**
+1. リポジトリをクローン: `git clone https://github.com/nasu-cell/Smash-Prototype.git`
 2. Unity Hub でプロジェクトを開く
-3. [Photon Dashboard](https://dashboard.photonengine.com/) で App ID を取得し、  
-   `Assets/Photon/Fusion/Resources/NetworkProjectConfig` に設定
+3. [Photon Dashboard](https://dashboard.photonengine.com/) で App ID を取得し、`Assets/Photon/Fusion/Resources/NetworkProjectConfig` に設定
 4. `TitleScene` をビルドに追加して実行
+
+**B. ビルド済みファイルを実行する場合（プレイヤー向け）**
+1. [こちら（Releasesページ）](URL) から最新のビルドファイルをダウンロード
+2. zipを展開し、実行ファイル（.exe）を起動
 
 ---
 
