@@ -22,9 +22,9 @@ Unity 6 と Photon Fusion 2 を用いて、ネットワーク対戦機能を一�
 ## プレイ動画 / スクリーンショット
 
 ### ローカル対戦
-
+[![デモ動画のサムネイル](https://img.youtube.com/vi/動画ID/0.jpg)](https://www.youtube.com/watch?v=動画ID)
 ### 通信対戦
-
+[![デモ動画のサムネイル](https://img.youtube.com/vi/動画ID/0.jpg)](https://www.youtube.com/watch?v=動画ID)
 ---
 
 ## ゲーム概要
