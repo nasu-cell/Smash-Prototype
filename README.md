@@ -194,7 +194,7 @@ Assets/Scripts/
 4. `TitleScene` をビルドに追加して実行
 
 **B. ビルド済みファイルを実行する場合（プレイヤー向け）**
-1. [こちら（Releasesページ）](URL) から最新のビルドファイルをダウンロード
+1. [こちら（Releasesページ）](https://github.com/nasu-cell/Smash-Prototype/releases) から最新のビルドファイルをダウンロード
 2. zipを展開し、実行ファイル（.exe）を起動
 
 ---
