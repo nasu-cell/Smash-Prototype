@@ -68,12 +68,10 @@ Unity 6 と Photon Fusion 2 を用いて、ローカル対戦とネットワー�
 
 ## プレイ方法
 
-### 公開リンク / ダウンロード
+### ブラウザでプレイ
 
-ビルド済みファイルは [Releases ページ](https://github.com/nasu-cell/Smash-Prototype/releases) からダウンロードできます。
+UnityRoomで公開しています：[こちらからプレイ](https://unityroom.com/games/smash-prototype)
 
-1. 最新リリースから **Smash-Prototype.zip** をダウンロードして展開
-2. 展開したフォルダ内の **.exe ファイル** をダブルクリックして起動
 
 ### プレイ動画
 
